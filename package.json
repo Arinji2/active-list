@@ -1,0 +1,29 @@
+{
+  "name": "online-list",
+  "version": "1.0.0",
+  "description": "Discord bot to manage active hackathon contributors",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "register": "tsx src/deploy-commands.ts"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "hackathon",
+    "activity"
+  ],
+  "author": "Arinjay & team",
+  "license": "ISC",
+  "packageManager": "pnpm@10.6.5",
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
