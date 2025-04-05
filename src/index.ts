@@ -21,6 +21,9 @@ const clientId = process.env.CLIENT_ID!;
 const guildId = process.env.GUILD_ID!;
 const activeRoleId = process.env.ACTIVE_ROLE_ID!;
 
+if (!token || !clientId || !guildId || !activeRoleId) {
+  throw new Error("Missing required environment variables");
+}
 function formatDuration(joinedAt: string): string {
   const now = new Date();
   const joined = new Date(joinedAt);
