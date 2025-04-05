@@ -16,14 +16,11 @@ import { scheduleChecks } from "./scheduler.js";
 
 dotenv.config();
 
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const token = process.env.DISCORD_TOKEN!;
 const clientId = process.env.CLIENT_ID!;
 const guildId = process.env.GUILD_ID!;
 const activeRoleId = process.env.ACTIVE_ROLE_ID!;
-
-if (!token || !clientId || !guildId || !activeRoleId) {
-  throw new Error("Missing required environment variables");
-}
 
 function formatDuration(joinedAt: string): string {
   const now = new Date();
@@ -75,8 +72,6 @@ const rest = new REST({ version: "10" }).setToken(token);
   });
 })();
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-
 client.on("ready", () => {
   console.log(`Logged in as ${client.user!.tag}`);
   scheduleChecks(client);
@@ -89,15 +84,7 @@ client.on("interactionCreate", async (interaction) => {
   const target = interaction.options.getUser("user") || interaction.user;
 
   if (interaction.commandName === "active") {
-    let member;
-    try {
-      member = await interaction.guild!.members.fetch(target.id);
-    } catch {
-      return interaction.reply({
-        content: "Couldn't find that user in the server.",
-        ephemeral: true,
-      });
-    }
+    const member = await interaction.guild!.members.fetch(target.id);
 
     if (sub === "join") {
       data[target.id] = {
@@ -105,6 +92,7 @@ client.on("interactionCreate", async (interaction) => {
         joinedAt: new Date().toISOString(),
         pendingCheck: false,
       };
+      console.log(activeRoleId);
       await member.roles.add(activeRoleId);
       writeData(data);
       await interaction.reply(`<@${target.id}> is now active!`);
@@ -123,14 +111,13 @@ client.on("interactionCreate", async (interaction) => {
       } else {
         await interaction.reply({
           content: `You're not on the active list.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
     } else if (sub === "list") {
-      const time = utcTime();
       const lines = Object.entries(data).map(([id, user]) => {
         const mark = user.status === "inactive" ? "❌" : "✅";
-        return `${mark} <@${id}> — ${user.status.toUpperCase()} (${formatDuration(user.joinedAt)}, ${time})`;
+        return `${mark} <@${id}> — ${user.status.toUpperCase()} (${formatDuration(user.joinedAt)}, ${utcTime()})`;
       });
       await interaction.reply({
         content: lines.join("\n") || "No one is active.",
