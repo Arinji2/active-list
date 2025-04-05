@@ -8,6 +8,7 @@ import {
   Role,
   TextChannel,
   User,
+  MessageFlags,
 } from "discord.js";
 import dotenv from "dotenv";
 import { readData, writeData, ActiveUser } from "./storage/data.js";
@@ -15,7 +16,6 @@ import { scheduleChecks } from "./scheduler.js";
 
 dotenv.config();
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const token = process.env.DISCORD_TOKEN!;
 const clientId = process.env.CLIENT_ID!;
 const guildId = process.env.GUILD_ID!;
@@ -24,6 +24,7 @@ const activeRoleId = process.env.ACTIVE_ROLE_ID!;
 if (!token || !clientId || !guildId || !activeRoleId) {
   throw new Error("Missing required environment variables");
 }
+
 function formatDuration(joinedAt: string): string {
   const now = new Date();
   const joined = new Date(joinedAt);
@@ -74,6 +75,8 @@ const rest = new REST({ version: "10" }).setToken(token);
   });
 })();
 
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
 client.on("ready", () => {
   console.log(`Logged in as ${client.user!.tag}`);
   scheduleChecks(client);
@@ -86,7 +89,15 @@ client.on("interactionCreate", async (interaction) => {
   const target = interaction.options.getUser("user") || interaction.user;
 
   if (interaction.commandName === "active") {
-    const member = await interaction.guild!.members.fetch(target.id);
+    let member;
+    try {
+      member = await interaction.guild!.members.fetch(target.id);
+    } catch {
+      return interaction.reply({
+        content: "Couldn't find that user in the server.",
+        ephemeral: true,
+      });
+    }
 
     if (sub === "join") {
       data[target.id] = {
@@ -94,7 +105,6 @@ client.on("interactionCreate", async (interaction) => {
         joinedAt: new Date().toISOString(),
         pendingCheck: false,
       };
-      console.log(activeRoleId);
       await member.roles.add(activeRoleId);
       writeData(data);
       await interaction.reply(`<@${target.id}> is now active!`);
@@ -117,16 +127,44 @@ client.on("interactionCreate", async (interaction) => {
         });
       }
     } else if (sub === "list") {
+      const time = utcTime();
       const lines = Object.entries(data).map(([id, user]) => {
         const mark = user.status === "inactive" ? "❌" : "✅";
-        return `${mark} <@${id}> — ${user.status.toUpperCase()} (${formatDuration(user.joinedAt)}, ${utcTime()})`;
+        return `${mark} <@${id}> — ${user.status.toUpperCase()} (${formatDuration(user.joinedAt)}, ${time})`;
       });
       await interaction.reply({
         content: lines.join("\n") || "No one is active.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   }
 });
 
 client.login(token);
+
+async function unregisterCommands() {
+  try {
+    const cmds = (await rest.get(
+      Routes.applicationGuildCommands(clientId, guildId),
+    )) as any[];
+
+    for (const cmd of cmds) {
+      await rest.delete(
+        Routes.applicationGuildCommand(clientId, guildId, cmd.id),
+      );
+      console.log(`Unregistered command: ${cmd.name}`);
+    }
+  } catch (err) {
+    console.error("Error unregistering commands:", err);
+  }
+}
+
+function gracefulShutdown() {
+  console.log("Shutting down bot, unregistering commands...");
+  unregisterCommands().finally(() => {
+    process.exit(0);
+  });
+}
+
+process.on("SIGINT", gracefulShutdown);
+process.on("SIGTERM", gracefulShutdown);
